@@ -11,5 +11,5 @@ plink2 \
   --bfile $INPUT_BGEN \
   --sample $INPUT_SAMPLE
   --remove $SEX_MISMATCH \
-  --make-bgen \
+  ----export bgen-1.3 id-delim=: \
   --out $OUTPUT

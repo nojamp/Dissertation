@@ -1,0 +1,48 @@
+# -*- mode: snakemake -*-
+
+# Directories
+RAW_DIR = "../../../data/raw/Nojus/genetic_data_raw"
+QC_DIR = "../../../data/intermediate/2-Genetic-Data-QC"
+
+#CHROMOSOMES = list(range(1, 23))
+CHROMOSOMES = [21, 22, 23]
+
+def get_padded(wildcards):
+  """Return padded number for input filename (01, 02, or 23)"""
+  chrom = int(wildcards.chr)
+  if chrom < 10:
+      return f"0{chrom}"
+  else:
+      return str(chrom)
+
+rule all:
+  "The default rule"
+  input: "../../../data/intermediate/2-Genetic-Data-QC/2.2-SL/SL_QC_list.irem"
+
+rule variant_qc:
+  "run variant-level QC"
+  input:
+        bgen = lambda w: f"{RAW_DIR}/filtered_{get_padded(w)}.bgen",
+        sample = f"{RAW_DIR}/swapped.sample"
+  output:
+        output = f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen"
+  params:
+        out_prefix = f"{QC_DIR}/2.1-VL/VL_{{chr}}"
+  shell:"""
+  . 2.1-Variant-Level-QC.sh {input.bgen} {input.sample} {params.out_prefix}
+  """
+
+rule sample_level_qc_list:
+  "extract list of samples to remove due to sample-level qc"
+  input:        
+        bgens = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen", chr=CHROMOSOMES),
+        sample = f"{RAW_DIR}/swapped.sample"
+  output: f"{QC_DIR}/2.2-SL/SL_QC_list.irem"
+  params:
+        qc_dir = QC_DIR
+  shell:"""
+  . 2.2.1-Sample-Level-List-QC.sh {params.qc_dir}/2.1-VL {input.sample} {params.qc_dir}/2.2-SL
+  """
+
+
+
