@@ -17,7 +17,7 @@ def get_padded(wildcards):
 
 rule all:
   "The default rule"
-  input: "../../../data/intermediate/2-Genetic-Data-QC/2.2-SL/SL_QC_list.irem"
+  input: f"{QC_DIR}/2.2-SL/SL_QC_list.irem"
 
 rule variant_qc:
   "run variant-level QC"
@@ -32,17 +32,61 @@ rule variant_qc:
   . 2.1-Variant-Level-QC.sh {input.bgen} {input.sample} {params.out_prefix}
   """
 
-rule sample_level_qc_list:
-  "extract list of samples to remove due to sample-level qc"
-  input:        
+rule combine_bgens:
+  "combine individual chromosome data into one bgen file"
+  input:
         bgens = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen", chr=CHROMOSOMES),
         sample = f"{RAW_DIR}/swapped.sample"
-  output: f"{QC_DIR}/2.2-SL/SL_QC_list.irem"
+  output:
+       combined_bgen = f"{QC_DIR}/2.2-SL/combined.bgen" 
   params:
         qc_dir = QC_DIR
   shell:"""
-  . 2.2.1-Sample-Level-List-QC.sh {params.qc_dir}/2.1-VL {input.sample} {params.qc_dir}/2.2-SL
+. 2.2.1-Combine-BGENs.sh {params.qc_dir}/2.1-VL {input.sample} {params.qc_dir}/2.2-SL
+"""
+
+rule generate_slqc_list:
+  "generate a list of samples to remove based on sample-level qc"
+  input:
+        combined_bgen = f"{QC_DIR}/2.2-SL/combined.bgen"
+        sample = f"{RAW_DIR}/swapped.sample"
+  output:
+        output = f"{QC_DIR}/2.2-SL/SL_QC.id"
+  params:
+        out_prefix = f"{QC_DIR}/2.2-SL/SL_QC"
+  shell:"""
+  . 2.2.2-Generate-SLQC-List.sh {input.bgen} {input.sample} {params.out_prefix}
   """
 
+rule keep_slfiltered_samples:
+  "keep samples that passed the filter "
+  input:
+        bgens = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen", chr=CHROMOSOMES),
+        sample = f"{RAW_DIR}/swapped.sample",
+        ids_to_keep = f"{QC_DIR}/2.2-SL/SL_QC.id"
+  output:
+        output = f"{QC_DIR}/2.2-SL/SL_{{chr}}.bgen" 
+  params:
+        out_prefix = f"{QC_DIR}/2.2-SL/SL_{{chr}}"
+  shell:"""
+. 2.2.3-Keep-Samples.sh {input.bgens} {input.sample} {input.ids_to_keep} {params.out_prefix}
+"""
 
+rule find_sex_mismatch:
+  "find samples with mismatched sex"
+  input:
+        bgen23 = f"{QC_DIR}/2.2-SL/SL_23.bgen"
+        sample = f"{QC_DIR}/2.2-SL/SL_23.sample"
+  output:
+        output = f"{QC_DIR}/2.3-SM/SM.sexcheck"
+  params:
+        out_prefix = f"{QC_DIR}/2.3-SM/SM"
+  shell:"""
+  . 2.3.1-Sex-Mismatch-Find.sh {input.bgen23} {input.sample} {params.out_prefix}
+  """
 
+rule remove_sex_mismatch:
+
+rule problematic_variants_qc:
+
+rule pruning:

@@ -14,19 +14,16 @@ plink2 \
   --export bgen-1.3 id-delim=: \
   --out $OUTPUT_DIR/biallelic_only_temp
 
-# Export variant information including alleles
 plink2 \
   --bgen $OUTPUT_DIR/biallelic_only_temp.bgen ref-unknown \
   --sample $OUTPUT_DIR/biallelic_only_temp.sample \
   --write-alleles \
   --out $OUTPUT_DIR/variant_info_temp
 
-# This creates variant_info.alleles with format: CHR SNP POS A1 A2
 awk '($4 == "A" && $5 == "T") || ($4 == "T" && $5 == "A") || \
      ($4 == "G" && $5 == "C") || ($4 == "C" && $5 == "G") \
      {print $2}' $OUTPUT_DIR/variant_info_temp.alleles > $OUTPUT_DIR/ambiguous_snps.txt
 
-# Now exclude ambiguous variants
 plink2 \
   --bgen $OUTPUT_DIR/biallelic_only_temp.bgen ref-unknown \
   --sample $OUTPUT_DIR/biallelic_only_temp.sample \
@@ -35,4 +32,4 @@ plink2 \
   --out $OUTPUT
 
 rm $OUTPUT_DIR/biallelic_only_temp*  
-rm $OUTPUT_DIR/variant_info_temp.alleles
+rm $OUTPUT_DIR/variant_info_temp*
