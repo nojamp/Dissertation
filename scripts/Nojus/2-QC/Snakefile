@@ -4,8 +4,7 @@
 RAW_DIR = "../../../data/raw/Nojus/genetic_data_raw"
 QC_DIR = "../../../data/intermediate/2-Genetic-Data-QC"
 
-#CHROMOSOMES = list(range(1, 23))
-CHROMOSOMES = [21, 22, 23]
+CHROMOSOMES = list(range(1, 23+1))
 
 def get_padded(wildcards):
   """Return padded number for input filename (01, 02, or 23)"""
@@ -17,7 +16,15 @@ def get_padded(wildcards):
 
 rule all:
   "The default rule"
-  input: f"{QC_DIR}/2.2-SL/SL_QC_list.irem"
+  input:         
+        pgen_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.pgen",
+        psam_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.psam",
+        pvar_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.pvar",
+        pgen_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.pgen",
+        psam_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.psam",
+        pvar_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.pvar"
+
+# 1. Variant-level-QC
 
 rule variant_qc:
   "run variant-level QC"
@@ -25,68 +32,130 @@ rule variant_qc:
         bgen = lambda w: f"{RAW_DIR}/filtered_{get_padded(w)}.bgen",
         sample = f"{RAW_DIR}/swapped.sample"
   output:
-        output = f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen"
+        pgen = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pgen",
+        psam = f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam",
+        pvar = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pvar",
+        log = f"{QC_DIR}/2.1-VL/VL_{{chr}}.log"
   params:
-        out_prefix = f"{QC_DIR}/2.1-VL/VL_{{chr}}"
+        out_prefix = f"{QC_DIR}/2.1-VL/VL_{{chr}}",
+        chr_num = "{chr}"
   shell:"""
-  . 2.1-Variant-Level-QC.sh {input.bgen} {input.sample} {params.out_prefix}
+  mkdir -p {QC_DIR}/2.1-VL
+  . 2.1-Variant-Level-QC.sh {input.bgen} {input.sample} {params.chr_num} {params.out_prefix}
   """
 
-rule combine_bgens:
-  "combine individual chromosome data into one bgen file"
-  input:
-        bgens = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen", chr=CHROMOSOMES),
-        sample = f"{RAW_DIR}/swapped.sample"
-  output:
-       combined_bgen = f"{QC_DIR}/2.2-SL/combined.bgen" 
-  params:
-        qc_dir = QC_DIR
-  shell:"""
-. 2.2.1-Combine-BGENs.sh {params.qc_dir}/2.1-VL {input.sample} {params.qc_dir}/2.2-SL
-"""
+# 2. Sample-level QC
 
 rule generate_slqc_list:
-  "generate a list of samples to remove based on sample-level qc"
+  "generate list of samples that passed sample-level qc and sex-check list"
   input:
-        combined_bgen = f"{QC_DIR}/2.2-SL/combined.bgen"
-        sample = f"{RAW_DIR}/swapped.sample"
+        pgen = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.pgen", chr=CHROMOSOMES),
+        psam = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam", chr=CHROMOSOMES),
+        pvar = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.pvar", chr=CHROMOSOMES)
   output:
-        output = f"{QC_DIR}/2.2-SL/SL_QC.id"
+        slqc_list = f"{QC_DIR}/2.2-SL/SL_QC.id",
+        sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck"
+  resources: mem_mb = 60000, threads = 20, runtime = 25
   params:
+        in_dir = f"{QC_DIR}/2.1-VL",
         out_prefix = f"{QC_DIR}/2.2-SL/SL_QC"
   shell:"""
-  . 2.2.2-Generate-SLQC-List.sh {input.bgen} {input.sample} {params.out_prefix}
+  mkdir -p {QC_DIR}/2.2-SL
+  . 2.2.1-Generate-SLQC-List.sh {params.in_dir} {params.out_prefix}
   """
 
 rule keep_slfiltered_samples:
-  "keep samples that passed the filter "
+  "keep samples that passed the filters"
   input:
-        bgens = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.bgen", chr=CHROMOSOMES),
-        sample = f"{RAW_DIR}/swapped.sample",
-        ids_to_keep = f"{QC_DIR}/2.2-SL/SL_QC.id"
+        pgen = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pgen",
+        psam = f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam",
+        pvar = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pvar",
+        slqc_list = f"{QC_DIR}/2.2-SL/SL_QC.id",
+        sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck"
   output:
-        output = f"{QC_DIR}/2.2-SL/SL_{{chr}}.bgen" 
+        pgen = f"{QC_DIR}/2.2-SL/SL_{{chr}}.pgen",
+        psam = f"{QC_DIR}/2.2-SL/SL_{{chr}}.psam",
+        pvar = f"{QC_DIR}/2.2-SL/SL_{{chr}}.pvar",
+        log = f"{QC_DIR}/2.2-SL/SL_{{chr}}.log"
   params:
+        in_prefix = f"{QC_DIR}/2.1-VL/VL_{{chr}}",
         out_prefix = f"{QC_DIR}/2.2-SL/SL_{{chr}}"
   shell:"""
-. 2.2.3-Keep-Samples.sh {input.bgens} {input.sample} {input.ids_to_keep} {params.out_prefix}
-"""
-
-rule find_sex_mismatch:
-  "find samples with mismatched sex"
-  input:
-        bgen23 = f"{QC_DIR}/2.2-SL/SL_23.bgen"
-        sample = f"{QC_DIR}/2.2-SL/SL_23.sample"
-  output:
-        output = f"{QC_DIR}/2.3-SM/SM.sexcheck"
-  params:
-        out_prefix = f"{QC_DIR}/2.3-SM/SM"
-  shell:"""
-  . 2.3.1-Sex-Mismatch-Find.sh {input.bgen23} {input.sample} {params.out_prefix}
+  . 2.2.2-Apply-SL-List.sh {params.in_prefix} {input.slqc_list} {input.sm_list} {params.out_prefix}
   """
 
-rule remove_sex_mismatch:
+# 3. Remove problematic variants
 
 rule problematic_variants_qc:
+  "remove problematic variants"
+  input:
+        pgen = f"{QC_DIR}/2.2-SL/SL_{{chr}}.pgen",
+        psam = f"{QC_DIR}/2.2-SL/SL_{{chr}}.psam",
+        pvar = f"{QC_DIR}/2.2-SL/SL_{{chr}}.pvar"
+  output:
+        pgen = f"{QC_DIR}/2.3-PV/PV_{{chr}}.pgen",
+        psam = f"{QC_DIR}/2.3-PV/PV_{{chr}}.psam",
+        pvar = f"{QC_DIR}/2.3-PV/PV_{{chr}}.pvar",
+        log = f"{QC_DIR}/2.3-PV/PV_{{chr}}.log"
+  params:
+        in_prefix = f"{QC_DIR}/2.2-SL/SL_{{chr}}",
+        out_prefix = f"{QC_DIR}/2.3-PV/PV_{{chr}}"
+  shell:"""
+  mkdir -p {QC_DIR}/2.3-PV
+  . 2.3-Problematic-Variants-QC.sh {params.in_prefix} {params.out_prefix}
+  """
+
+# 4. Pruning
 
 rule pruning:
+  "remove problematic variants"
+  input:
+        pgen = expand(f"{QC_DIR}/2.3-PV/PV_{{chr}}.pgen", chr=CHROMOSOMES),
+        psam = expand(f"{QC_DIR}/2.3-PV/PV_{{chr}}.psam", chr=CHROMOSOMES),
+        pvar = expand(f"{QC_DIR}/2.3-PV/PV_{{chr}}.pvar", chr=CHROMOSOMES)
+  output:
+        pgen_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.pgen",
+        psam_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.psam",
+        pvar_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.pvar",
+        log_unpruned = f"{QC_DIR}/2.4-Pruning/clean_unpruned.log",
+        pgen_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.pgen",
+        psam_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.psam",
+        pvar_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.pvar",
+        log_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.log"        
+  resources: threads = 20, runtime = 25
+  params:
+        in_dir = f"{QC_DIR}/2.3-PV",
+        unpruned_prefix = f"{QC_DIR}/2.4-Pruning/clean_unpruned",
+        pruned_prefix = f"{QC_DIR}/2.4-Pruning/clean_pruned"
+  shell:"""
+  mkdir -p {QC_DIR}/2.4-Pruning
+  . 2.4-Pruning.sh {params.in_dir} {params.unpruned_prefix} {params.pruned_prefix}
+  """
+
+# 0. Cleaning
+
+rule clean_VL:
+  "clean directory 2.1-VL"
+  shell:"""
+  rm -rf {QC_DIR}/2.1-VL
+  """
+rule clean_SL:
+  "clean directory 2.2-SL"
+  shell:"""
+  rm -rf {QC_DIR}/2.2-SL
+  """
+rule clean_PV:
+  "clean directory 2.3-PV"
+  shell:"""
+  rm -rf {QC_DIR}/2.3-PV
+  """
+rule clean_pruning:
+  "clean directory 2.4-Pruning"
+  shell:"""
+  rm -rf {QC_DIR}/2.4-Pruning
+  """
+rule clean_all:
+  "clean all intermediate genetic QC directories (keep final result))"
+  shell:"""
+  snakemake -c1 clean_VL clean_SL clean_PV
+  """

@@ -2,18 +2,21 @@
 
 INPUT_BGEN=$1
 INPUT_SAMPLE=$2
-OUTPUT=$3
+INPUT_CHR=$3
+OUTPUT=$4
 
 module add apps/plink2
 CMD=(
   plink2
-    --bgen $INPUT_BGEN ref-first
+    --bgen $INPUT_BGEN ref-first snpid-chr
     --sample $INPUT_SAMPLE
-    --maf 0.005                   # MAF >= 0.5%
-    --geno 0.05                   # Variant call rate > 95%
-    --hwe 1e-6                    # Hardy-Weinberg equilibrium p > 1e-6
-    --rm-dup exclude-all          # Removes duplicates
-    --export bgen-1.3 id-delim=:  # Save as new BGEN file
+    --lax-bgen-import
+    --set-missing-var-ids @:#\$r,\$a \
+    --new-id-max-allele-len 100 \
+    --maf 0.005                     # MAF >= 0.5%
+    --geno 0.05                     # Variant call rate > 95%
+    --hwe 1e-6                      # Hardy-Weinberg equilibrium p > 1e-6
+    --make-pgen                     # Save as PLINK2 native files
     --out $OUTPUT
 )
 
