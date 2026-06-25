@@ -6,30 +6,39 @@
 
 # 15678 individuals in original data set
 # some NAs coded as NAs others as negative numbers
-# 223+4985 missing data for all time points for all 4 metabolites of interest
-# no metabolite data removed due to extreme values (10sd away)
+# 223+6940 missing data for all time points for all 4 metabolites of interest
+# 200 individuals are twins (randomly selected one of them)
+# 15 metabolite values found to be extreme values (10sd away)
 
 # very few individuals have complete data for all time points
-# at least 3000 samples at each individual timepoint (except for BBS)
+# at least 2500 samples at each individual timepoint (except for BBS)
 
-# when grouped (age 8-9, 15-17, 24-30) each group has ~2000 individuals 
+# when grouped (age 8-9, 15-17, 24) each group has ~1500 individuals 
 # with complete longtitudinal data
 
 # Load libraries ----------------------------------------------------------
 
 library(tidyverse)
-
+library(haven) # for reading sav files
 library(naniar) # for dealing with NAs
+
+set.seed(13)
 
 # Load data ---------------------------------------------------------------
 
 args = commandArgs(trailingOnly=TRUE)
-INPUT = args[1]
-OUTPUT = agrs[2]
+INPUT_PHENO = args[1]
+INPUT_OMICSID = args[2]
+OUTPUT_PHENO = args[3]
+OUTPUT_OMICSID = args[4]
 
-# load data
-dat_pheno <- read_sav(paste0(INPUT))
+# load pheno data
+dat_pheno <- read_sav(paste0(INPUT_PHENO))
 head(dat_pheno)
+
+# Load in omicsid
+omicsid <- read_sav(paste0(INPUT_OMICSID))
+head(omicsid)
 
 # Inspect data ------------------------------------------------------------
 
@@ -76,12 +85,22 @@ sum(apply(dat_pheno[metabolite_cols], 1, anyNA))
 dat_pheno_noNAs <- dat_pheno %>% drop_na(all_of(metabolite_cols))
 dim(dat_pheno)[1]-dim(dat_pheno_noNAs)[1] # difference in dimensions is 223 as expected
 
+# children born to the same mother at the same time (e.g. twins) have the same ID but different qlet
+# there are 200 twins
+dat_pheno_noNAs %>% count(cidB4891) %>% filter(n>1) %>% nrow()
+
+# randomly select one of the IDs out of the duplicates
+dat_pheno_noTwins <- dat_pheno_noNAs %>% group_by(cidB4891) %>% sample_n(1) %>% ungroup()
+
+# Check duplicates successfully removed
+dat_pheno_noTwins %>% count(cidB4891) %>% filter(n>1) %>% nrow()
+
 
 # Recoding values below zero as NAs ---------------------------------------
 
 # all values for all variables should be positive
 # recode all values that are negative as NA using naniar package
-dat_pheno_below_zero_NAs <- dat_pheno_noNAs %>% replace_with_na_all(condition = ~.x < 0)
+dat_pheno_below_zero_NAs <- dat_pheno_noTwins %>% replace_with_na_all(condition = ~.x < 0)
 
 # check that this has worked
 summarise_metabolites(dat_pheno_below_zero_NAs, "chol")             
@@ -101,30 +120,30 @@ is_10sd_outlier <- function(x) {
 }
 
 # recode values 10sd away from mean as NA
-data_pheno_NA_recoded <- dat_pheno_below_zero_NAs %>%
+dat_pheno_NA_recoded <- dat_pheno_below_zero_NAs %>%
   mutate(across(all_of(metabolite_cols), ~ifelse(is_10sd_outlier(.), NA, .)))
 
 # check if this has introduced new NAs
 sum(is.na(dat_pheno_NA_recoded)) - sum(is.na(dat_pheno_below_zero_NAs))
-# no new NAs
+# 15 new NAs
 
 
 # Cleaning data with NAs in all 4 metabolites -----------------------------
 
-# exclude columns for metabolite measures at 31 and 43 --> very little data
-metabolite_cols_no3143 <- metabolite_cols[!grepl("31|43", metabolite_cols)]
+# exclude columns for metabolite measures at 31 and 43 and cord --> very little data
+metabolite_cols_no3143 <- metabolite_cols[!grepl("31|43|cord", metabolite_cols)]
 
 dim(dat_pheno_NA_recoded)[1] - sum(apply(dat_pheno_NA_recoded[metabolite_cols_no3143], 1, anyNA))
-# 25 people have data at all time points for all 4 metabolites (not sufficient)
+# 139 people have data at all time points for all 4 metabolites (not sufficient)
 
 dim(dat_pheno_NA_recoded)[1] - (dat_pheno_NA_recoded %>% filter(if_any(all_of(metabolite_cols_no3143), ~!is.na(.))) %>% dim())[1]
-# 4985 people completely missing data on all 4 metabolites of interest for all time points of interest 
+# 6940 people completely missing data on all 4 metabolites of interest for all time points of interest 
 
 dat_pheno_complete_NAs_removed <- dat_pheno_NA_recoded %>% 
   filter(if_any(all_of(metabolite_cols_no3143), ~!is.na(.)))
 
 dim(dat_pheno_complete_NAs_removed)
-# 10470 individuals with at least one value in one of the metabolites of interest
+# 8315 individuals with at least one value in one of the metabolites of interest
 
 # split up by metabolite
 chol_cols <- grep("chol_", metabolite_cols_no3143, ignore.case = TRUE, value = TRUE)
@@ -141,7 +160,7 @@ at_least_one_value(chol_cols)
 at_least_one_value(hdl_cols)
 at_least_one_value(ldl_cols)
 at_least_one_value(trig_cols)
-# about 10400 each
+# 8313-8315 each
 
 
 # Total sample available in each metabolite at each time point ------------
@@ -169,7 +188,7 @@ long_completeness_grouping <- function(named_cols, name, data){
   # seperate into groups
   vars_child <- named_cols[grepl("F7|F9|BBS", named_cols)]   # age 8-9
   vars_teen <- named_cols[grepl("TF3|TF4", named_cols)]      # age 15-17     
-  vars_adult <- named_cols[grepl("F24|cord", named_cols)]    # age 24-30
+  vars_adult <- named_cols[grepl("F24", named_cols)]    # age 24-30
   
   # make new groups that are averages of age ranges
   dat_grouped <- data %>%
@@ -202,14 +221,19 @@ complete_individuals <- function(named_groups){
   sum(complete.cases(dat_grouped[named_groups]))
 }
 
-complete_individuals(chol_groups) # 2562
-complete_individuals(hdl_groups) # 2016
-complete_individuals(ldl_groups) # 2016
-complete_individuals(trig_groups) # 2027
+complete_individuals(chol_groups) # 1950
+complete_individuals(hdl_groups) # 1563
+complete_individuals(ldl_groups) # 1563
+complete_individuals(trig_groups) # 1563
 
-# over 2000 individuals with longtitudinal data for all age ranges when grouped
+# over 1500 individuals with longtitudinal data for all age ranges when grouped
 
 
 # Save data ---------------------------------------------------------------
 
-dat_grouped |> write.csv(paste0(OUTPUT))
+# save phenotype data
+dat_grouped |> write.csv(paste0(OUTPUT_PHENO))
+
+# save new omicsids file containing only samples still being used
+filtered_omicsids <- omicsid %>% semi_join(dat_grouped, by = c("cidB4891", "qlet"))
+filtered_omicsids |> write.csv(paste0(OUTPUT_OMICSID))
