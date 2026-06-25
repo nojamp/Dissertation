@@ -46,6 +46,14 @@ rule variant_qc:
 
 # 2. Sample-level QC
 
+rule create_pheno_filtered_list:
+  "generate pheno filtered id list"
+  input: f"{QC_DIR}/../1-Phenotype-Data-QC/1.1_filtered_omicsids.csv"
+  output: f"{QC_DIR}/2.2-SL/Pheno_QC.id"
+  shell:"""
+  (echo -e "#FID\tIID"; sed '1d' {input} | sed 's/"//g' | awk -F',' '{{print $4$3 "\t" $4$3}}') > {output}
+  """
+
 rule generate_slqc_list:
   "generate list of samples that passed sample-level qc and sex-check list"
   input:
@@ -70,6 +78,7 @@ rule keep_slfiltered_samples:
         pgen = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pgen",
         psam = f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam",
         pvar = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pvar",
+        pheno_filtered_list = f"{QC_DIR}/2.2-SL/Pheno_QC.id",
         slqc_list = f"{QC_DIR}/2.2-SL/SL_QC.id",
         sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck"
   output:
@@ -81,7 +90,7 @@ rule keep_slfiltered_samples:
         in_prefix = f"{QC_DIR}/2.1-VL/VL_{{chr}}",
         out_prefix = f"{QC_DIR}/2.2-SL/SL_{{chr}}"
   shell:"""
-  . 2.2.2-Apply-SL-List.sh {params.in_prefix} {input.slqc_list} {input.sm_list} {params.out_prefix}
+  . 2.2.2-Apply-SL-List.sh {params.in_prefix} {input.pheno_filtered_list} {input.slqc_list} {input.sm_list} {params.out_prefix}
   """
 
 # 3. Remove problematic variants
