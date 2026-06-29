@@ -9,10 +9,16 @@ library(RNOmni)
 
 # Load data ---------------------------------------------------------------
 
-data <- read_csv("1.1_cleaned_pheno_data.csv")
-omics_ids <- read.csv("post_genetic_qc_omics_ids.csv")
+args = commandArgs(trailingOnly=TRUE)
+INPUT_PHENO_DATA = args[1]
+INPUT_OMICS_IDS = args[2]
+INPUT_PCS = args[3]
+OUTPUT_DIR = args[4]
 
-pcs <- read.table("genetic_pcs20.eigenvec", header = FALSE)
+data <- read_csv(paste(INPUT_PHENO_DATA))
+omics_ids <- read.csv(paste(INPUT_OMICS_IDS))
+
+pcs <- read.table(paste(INPUT_PCS), header = FALSE)
 colnames(pcs) <- c("FID", "IID", paste0("PC", 1:20))
 pcs <- pcs %>%
   mutate(
@@ -51,16 +57,13 @@ dat <- data_post_qcs %>%
 ls(dat)
 
 
-ls(dat)
-
-
 # Log transform then obtain residuals of metabolites ----------------------
 
 # function to do this for each time point
 pre_IRN_processing <- function(dat, study_var_codes, age_col, bmi_col, month_col) {
   
   dat %>%
-    select(matches(paste0(study_var_codes, "|kz021|PC|cidb4891"), ignore.case = TRUE)) %>%     # select the study vars, sex, PCs, ids
+    select(matches(paste0(study_var_codes, "|kz021|PC|cidb4891|gi_1000g_g0m_g1"), ignore.case = TRUE)) %>%     # select the study vars, sex, PCs, ids
     mutate(across(
       .cols = matches("CHOL|TRIG|LDL|HDL", ignore.case = TRUE),
       .fns = ~ residuals(
@@ -186,10 +189,10 @@ data_size(comb_hdl)
 
 # Save the different groups -----------------------------------------------
 
-comb_chol %>% write_csv("3-chol-data.csv")
-comb_trig %>% write_csv("3-trig-data.csv")
-comb_ldl %>% write_csv("3-ldl-data.csv")
-comb_hdl %>% write_csv("3-hdl-data.csv")
+comb_chol %>% write_csv(paste(OUTPUT_DIR,"/3-chol-data.csv"))
+comb_trig %>% write_csv(paste(OUTPUT_DIR,"/3-trig-data.csv"))
+comb_ldl %>% write_csv(paste(OUTPUT_DIR,"/3-ldl-data.csv"))
+comb_hdl %>% write_csv(paste(OUTPUT_DIR,"/3-hdl-data.csv"))
 
 
 

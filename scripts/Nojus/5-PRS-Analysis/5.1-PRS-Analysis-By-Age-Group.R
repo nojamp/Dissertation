@@ -11,6 +11,8 @@ INPUT_MET_TRANS_PLUS_PCS = args[1]
 INPUT_METABOLITE_NAME = args[2]
 INPUT_PRS_SCORES = args[3]
 
+OUTPUT = args[4]
+
 pheno_df <- read_csv(paste(INPUT_MET_TRANS_PLUS_PCS))
 metabolite <- as.character(INPUT_METABOLITE_NAME)
 prs_df <- read.table(paste(INPUT_PRS_SCORES), header = TRUE, sep = "\t")
@@ -145,3 +147,4 @@ for (prs_score in prs_scores) {
 
 # Save data ---------------------------------------------------------------
 
+all_results %>% write_csv(paste(OUTPUT))
