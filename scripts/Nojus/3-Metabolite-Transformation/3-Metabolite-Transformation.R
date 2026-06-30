@@ -189,10 +189,10 @@ data_size(comb_hdl)
 
 # Save the different groups -----------------------------------------------
 
-comb_chol %>% write_csv(paste(OUTPUT_DIR,"/3-chol-data.csv"))
-comb_trig %>% write_csv(paste(OUTPUT_DIR,"/3-trig-data.csv"))
-comb_ldl %>% write_csv(paste(OUTPUT_DIR,"/3-ldl-data.csv"))
-comb_hdl %>% write_csv(paste(OUTPUT_DIR,"/3-hdl-data.csv"))
+comb_chol %>% write_csv(paste(OUTPUT_DIR,"3-chol-data.csv"))
+comb_trig %>% write_csv(paste(OUTPUT_DIR,"3-trig-data.csv"))
+comb_ldl %>% write_csv(paste(OUTPUT_DIR,"3-ldl-data.csv"))
+comb_hdl %>% write_csv(paste(OUTPUT_DIR,"3-hdl-data.csv"))
 
 
 

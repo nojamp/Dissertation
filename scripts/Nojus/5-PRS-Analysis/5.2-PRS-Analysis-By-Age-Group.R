@@ -7,40 +7,17 @@ library(performance)
 # Load data ---------------------------------------------------------------
 
 args = commandArgs(trailingOnly=TRUE)
-INPUT_MET_TRANS_PLUS_PCS = args[1]
+INPUT_DATA = args[1]
 INPUT_METABOLITE_NAME = args[2]
-INPUT_PRS_SCORES = args[3]
 
-OUTPUT = args[4]
+OUTPUT = args[3]
 
-pheno_df <- read_csv(paste(INPUT_MET_TRANS_PLUS_PCS))
+data <- read_csv(paste(INPUT_DATA))
 metabolite <- as.character(INPUT_METABOLITE_NAME)
-prs_df <- read.table(paste(INPUT_PRS_SCORES), header = TRUE, sep = "\t")
 
 # save unique time points and PRS scores
-age_groups <- unique(pheno_df$age_group)
-prs_scores <- unique(prs_df$PGS)
-
-# Standardise PRS scores and combine the data frames ----------------------
-
-# normalise the scores
-prs_std_df <- prs_df %>%
-  group_by(PGS) %>%
-  mutate(SUM_norm = (SUM - mean(SUM)) / sd(SUM)) %>%
-  ungroup()
-
-# put into compatible format ready to combine
-prs_std_wide <- prs_std_df %>%
-  pivot_wider(
-    id_cols     = ID_sample,      # Column 1 = ID_sample
-    names_from  = PGS,            # New column names come from unique values in PGS
-    values_from = SUM_norm        # Fill those new columns with SUM_norm
-  ) %>% mutate(
-    gi_1000g_g0m_g1 = str_sub(ID_sample, 1, -2)
-  )
-
-# combine the data using the omics Ids
-combined_data <- prs_std_wide %>% inner_join(pheno_df, by = "gi_1000g_g0m_g1")
+age_groups <- unique(data$age_group)
+prs_scores <- data %>% select(matches("PGS")) %>% colnames()
 
 
 # Function to fit linear model --------------------------------------------
@@ -133,12 +110,12 @@ n_bootstrapped <- function(data, metabolite, prs_score, n_bootstraps){
 all_results <- tibble()
 
 for (prs_score in prs_scores) {
-  for (age_group in age_groups) {
-    data_for_analysis <- combined_data  %>% filter(age_group == age_group)
+  for (i in age_groups) {
+    data_for_analysis <- combined_data  %>% filter(age_group == i)
     result <- n_bootstrapped(data_for_analysis, metabolite, prs_score, 1000) %>% 
       mutate(
         prs_score = prs_score,
-        age_group = age_group
+        age_group = i
       )
     all_results <- bind_rows(all_results, result)
   }
