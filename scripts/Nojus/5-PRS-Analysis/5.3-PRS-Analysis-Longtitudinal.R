@@ -4,18 +4,15 @@ library(tidyverse)
 library(splines)
 library(glmmTMB)
 library(performance)
-library(anova)
-
 
 # Load data ---------------------------------------------------------------
 
 args = commandArgs(trailingOnly=TRUE)
 INPUT_DATA = args[1]
 METABOLITE_NAME = args[2]
-OUTPUT_DATA = args[2]
+OUTPUT_DATA = args[3]
 
-
-data <- chol_prs_comb %>% mutate(age_std = (age - mean(age))/sd(age))
+data <- read_csv(paste(INPUT_DATA))
 
 prs_scores <- data %>% select(matches("PGS")) %>% colnames()
 metabolite <- as.character(METABOLITE_NAME)
@@ -56,7 +53,8 @@ summarise_LMEM_main <- function(data, prs_score, metabolite){
     prs_coef_lci= coef_summary[1],
     prs_coef    = coef_summary[2],
     prs_coef_uci= coef_summary[3],
-    r2          = metrics$R2,
+    R2_conditional= metrics$$R2_conditional,
+    R2_marginal = metrics$R2_marginal,
     aic         = metrics$AIC,
     bic         = metrics$BIC,
     rmse        = metrics$RMSE,
@@ -105,4 +103,4 @@ for (i in prs_scores) {
 
 # Save results ------------------------------------------------------------
 
-all_results %>% write_csv(paste(OUTPUT))
+all_results %>% write_csv(paste(OUTPUT_DATA))
