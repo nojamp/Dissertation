@@ -20,15 +20,15 @@ def get_padded(wildcards):
 
 rule all:
   "The default rule"
-  input:         
+  input:
         eigenval = f"{QC_DIR}/2.5-PCA/genetic_pcs20.eigenval",
         eigenvec = f"{QC_DIR}/2.5-PCA/genetic_pcs20.eigenvec"
 
 ###################################################################################################
-# Recoding NAs
+# (1) Recoding NAs
 ###################################################################################################
 
-# 1. Recode NAs and create a sample sheet for eligible participants
+# 1.1 Recode NAs and create a sample sheet for eligible participants
 
 rule recode_nas:
   "recode NAs and create a sample sheet for eligible participants"
@@ -40,15 +40,12 @@ rule recode_nas:
         sampleid = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/eligible_sample.id"
   shell:"""
   mkdir -p {INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno
-  Rscript 1-Recoding-NAs.R/1.1-Recoding-NAs.R {input.pheno} {input.ommicsid} {output.pheno} {output.sampleid}
+  Rscript 1-Recoding-NAs/1.1-Recoding-NAs.R {input.pheno} {input.ommicsid} {output.pheno} {output.sampleid}
   """
 
 ###################################################################################################
-# Genetic QC + PCA
+# (2) Genetic QC + PCA
 ###################################################################################################
-
-
-
 
 # 2.1 Variant-level-QC
 
@@ -57,7 +54,7 @@ rule variant_qc:
   input:
         bgen = lambda w: f"{RAW_DIR}/genetic_data_raw/filtered_{get_padded(w)}.bgen",
         sample = f"{RAW_DIR}/genetic_data_raw/swapped.sample",
-        eligible_sample = f"{INTERMEDIATE}/1-Recoded-NAs-Pheno/eligible_sample.id"
+        eligible_sample = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/eligible_sample.id"
   output:
         pgen = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pgen",
         psam = f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam",
@@ -81,8 +78,9 @@ rule generate_slqc_list:
         pvar = expand(f"{QC_DIR}/2.1-VL/VL_{{chr}}.pvar", chr=CHROMOSOMES)
   output:
         slqc_list = f"{QC_DIR}/2.2-SL/SL_QC.id",
-        sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck"
-  resources: mem_mb = 60000, threads = 20, runtime = 25
+        sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck",
+        king_list = f"{QC_DIR}/2.2-SL/SL_QC.king.cutoff.out.id"
+  resources: mem_mb = 60000, threads = 20, runtime = 60
   params:
         in_dir = f"{QC_DIR}/2.1-VL",
         out_prefix = f"{QC_DIR}/2.2-SL/SL_QC"
@@ -98,7 +96,8 @@ rule keep_slfiltered_samples:
         psam = f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam",
         pvar = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pvar",
         slqc_list = f"{QC_DIR}/2.2-SL/SL_QC.id",
-        sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck"
+        sm_list = f"{QC_DIR}/2.2-SL/SL_QC.sexcheck",
+        king_list = f"{QC_DIR}/2.2-SL/SL_QC.king.cutoff.out.id"
   output:
         pgen = f"{QC_DIR}/2.2-SL/SL_{{chr}}.pgen",
         psam = f"{QC_DIR}/2.2-SL/SL_{{chr}}.psam",
@@ -108,10 +107,10 @@ rule keep_slfiltered_samples:
         in_prefix = f"{QC_DIR}/2.1-VL/VL_{{chr}}",
         out_prefix = f"{QC_DIR}/2.2-SL/SL_{{chr}}"
   shell:"""
-  . 2-Genetic-QC/2.2.2-Apply-SL-List.sh {params.in_prefix} {input.slqc_list} {input.sm_list} {params.out_prefix}
+  . 2-Genetic-QC/2.2.2-Apply-SL-List.sh {params.in_prefix} {input.slqc_list} {input.king_list} {input.sm_list} {params.out_prefix}
   """
 
-# 3. Remove problematic variants
+# 2.3 Remove problematic variants
 
 rule problematic_variants_qc:
   "remove problematic variants"
@@ -132,7 +131,7 @@ rule problematic_variants_qc:
   . 2-Genetic-QC/2.3-Problematic-Variants-QC.sh {params.in_prefix} {params.out_prefix}
   """
 
-# 4. Pruning
+# 2.4 Pruning
 
 rule pruning:
   "combine datasets and prune"
@@ -148,7 +147,7 @@ rule pruning:
         pgen_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.pgen",
         psam_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.psam",
         pvar_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.pvar",
-        log_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.log"        
+        log_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.log"
   resources: threads = 20, runtime = 25
   params:
         in_dir = f"{QC_DIR}/2.3-PV",
@@ -159,7 +158,7 @@ rule pruning:
   . 2-Genetic-QC/2.4-Pruning.sh {params.in_dir} {params.unpruned_prefix} {params.pruned_prefix}
   """
 
-# 5. PCA
+# 2.5 PCA
 rule pca:
   "PCA analysis of pruned variants"
   input:
@@ -169,19 +168,38 @@ rule pca:
   output:
         eigenval = f"{QC_DIR}/2.5-PCA/genetic_pcs20.eigenval",
         eigenvec = f"{QC_DIR}/2.5-PCA/genetic_pcs20.eigenvec"
-  resources: threads = 20, runtime = 30
+  resources: threads = 20, runtime = 90
   params:
         pruned_prefix = f"{QC_DIR}/2.4-Pruning/clean_pruned",
         pca_prefix = f"{QC_DIR}/2.5-PCA/genetic_pcs20"
   shell:"""
   mkdir -p {QC_DIR}/2.4-Pruning
-  
   module add apps/plink2
   plink2 \
   --pfile {params.pruned_prefix} \
   --pca 20 \
   --out {params.pca_prefix}
   """
+
+###################################################################################################
+# (3) Pre-Proccessing
+###################################################################################################
+
+rule pre_proccessing:
+  "unify units of pheno data, group, and transform metabolites"
+  input:
+        pheno = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/pheno_nas_recoded.csv",
+        psam_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.psam"
+  output:
+        pheno = f"{INTERMEDIATE_DIR}/3-Pre-Proccessed/pheno_transformed.csv"
+  shell:"""
+  mkdir -p {INTERMEDIATE_DIR}/3-Pre-Proccessed
+  Rscript 3-Pre-Proccessing/3.1-Pre-Proccessing-and-Transformation.R {input.pheno} {input.psam_pruned} {output.pheno}
+  """
+
+###################################################################################################
+# (4) PRS Calculation
+###################################################################################################
 
 # 0. Cleaning
 
@@ -190,7 +208,6 @@ rule clean1:
   shell:"""
   rm -rf {INTERMEDIATE_DIR}/1-Pheno-NAs-Recoded
   """
-
 rule clean_VL:
   "clean directory 2.1-VL"
   shell:"""
@@ -211,8 +228,13 @@ rule clean_pruning:
   shell:"""
   rm -rf {QC_DIR}/2.4-Pruning
   """
+rule clean_pca:
+  "clean directory 2.5-PCA"
+  shell:"""
+  rm -rf {QC_DIR}/2.5-PCA
+  """
 rule clean_all:
-  "clean all intermediate genetic QC directories (keep final result))"
+  "clean all intermediate genetic QC directories (keep final resultq)"
   shell:"""
   snakemake -c1 clean_VL clean_SL clean_PV
   """

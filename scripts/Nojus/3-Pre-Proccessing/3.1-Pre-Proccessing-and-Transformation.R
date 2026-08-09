@@ -1,42 +1,29 @@
+###########################################################################
+######## Pre-proccessing and transforming metabolites #####################
+###########################################################################
 
-# remove twins
-
-
-# pc analysis
-
-# season variable
-
-
-# groups
-
-# summary of vars
-
-# summary of longtitudinal stuff
-
-
-######
-
-# 10sd remove
-
-# metabolite transformation
-
-# save
-
+# Load libraries ----------------------------------------------------------
 
 library(tidyverse)
 library(data.table)
 library(RNOmni)
 
-
 # Load data ---------------------------------------------------------------
 
+args = commandArgs(trailingOnly=TRUE)
+INPUT_PHENO = args[1]
+INPUT_PSAM = args[2]
+INPUT_EIGENVEC = args[3]
+INPUT_EIGENVAL = args[4]
+OUTPUT_PHENO = args[5]
+
 # load pheno data and omics ids
-dat_pheno <- read_csv("pheno_nas_recoded.csv")
-omics_id <- fread("clean_unpruned.psam", header = TRUE)
+dat_pheno <- read_csv(paste0(INPUT_PHENO))
+omics_id <- fread(paste0(INPUT_PSAM), header = TRUE)
 
 # load pcs
-pcs <- read.table("genetic_pcs20.eigenvec", header = FALSE)
-eigenval <- read.table("genetic_pcs20.eigenval", header = FALSE)
+pcs <- read.table(paste0(INPUT_EIGENVEC), header = FALSE)
+eigenval <- read.table(paste0(INPUT_EIGENVAL), header = FALSE)
 colnames(pcs) <- c("FID", "IID", paste0("PC", 1:20))
 
 # only save the people with genetic data that passed the thresholds
@@ -305,6 +292,8 @@ for (metabolite in metabolites) {
   dat_long[[new_col_name]] <- transform_metabolite(dat_long, metabolite)
 }
 
+transformed_cols <- dat_long %>% select(matches("_transformed")) %>% colnames()
+
 # plot metabolites to check the transformation was successful
 dat_long %>%
   select(age_group, all_of(transformed_cols)) %>%
@@ -445,4 +434,4 @@ dat_long %>%
 
 # Save data ---------------------------------------------------------------
 
-dat_long %>% write_csv()
+dat_long %>% write_csv(paste0(OUTPUT_PHENO))

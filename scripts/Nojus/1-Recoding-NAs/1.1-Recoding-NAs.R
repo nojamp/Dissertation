@@ -1,5 +1,5 @@
 ###########################################################################
-######## Inspecting and Cleaning Phenotypic Data #########################
+######## Recoding NAs in Pheno Data #######################################
 ###########################################################################
 
 # Summary -----------------------------------------------------------------
@@ -52,16 +52,16 @@ summarise_metabolites <- function(data, metabolite_name){
 }
 
 # summarise  cholesterol
-summarise_metabolites(dat_pheno, "chol")              
+summarise_metabolites(dat_pheno, "chol")
 
-# summarise HDL                
-summarise_metabolites(dat_pheno, "hdl")  
+# summarise HDL
+summarise_metabolites(dat_pheno, "hdl")
 
 # summarise LDL
-summarise_metabolites(dat_pheno, "ldl")  
+summarise_metabolites(dat_pheno, "ldl")
 
 # summarise triglycerides
-summarise_metabolites(dat_pheno, "trig")  
+summarise_metabolites(dat_pheno, "trig")
 
 # Min for each is below 0 so must be recoded to be NA
 
@@ -72,10 +72,10 @@ summarise_metabolites(dat_pheno, "trig")
 dat_pheno_NA_recoded <- dat_pheno %>% replace_with_na_all(condition = ~.x <= 0)
 
 # check that this has worked
-summarise_metabolites(dat_pheno_NA_recoded, "chol")             
+summarise_metabolites(dat_pheno_NA_recoded, "chol")
 summarise_metabolites(dat_pheno_NA_recoded, "hdl")
-summarise_metabolites(dat_pheno_NA_recoded, "ldl")  
-summarise_metabolites(dat_pheno_NA_recoded, "trig")  
+summarise_metabolites(dat_pheno_NA_recoded, "ldl")
+summarise_metabolites(dat_pheno_NA_recoded, "trig")
 
 # different number of NAs for different clinic visits across each metabolite (as expected as people drop out)
 # similar number of NAs for same clinic visit regardless of metabolite (suggests same people had no data for all 4)
@@ -89,14 +89,14 @@ metabolite_cols <- grep("chol_|hdl_|ldl_|trig_", names(dat_pheno), ignore.case =
 metabolite_cols_ofinterest <- metabolite_cols[!grepl("31|43|cord", metabolite_cols)]
 
 dim(dat_pheno_NA_recoded)[1] - (dat_pheno_NA_recoded %>% filter(if_any(all_of(metabolite_cols_ofinterest), ~!is.na(.))) %>% dim())[1]
-# 7260 people completely missing data on all 4 metabolites of interest for all time points of interest 
+# 7260 people completely missing data on all 4 metabolites of interest for all time points of interest
 
-dat_pheno_complete_NAs_removed <- dat_pheno_NA_recoded %>% 
+dat_pheno_complete_NAs_removed <- dat_pheno_NA_recoded %>%
   filter(if_any(all_of(metabolite_cols_ofinterest), ~!is.na(.)))
 
 # Combine with omicsids ---------------------------------------------------
 
-combined_data <- dat_pheno_complete_NAs_removed %>% inner_join(omicsid, by = c("cidB4891", "qlet")) %>% 
+combined_data <- dat_pheno_complete_NAs_removed %>% inner_join(omicsid, by = c("cidB4891", "qlet")) %>%
                 mutate( IID = paste0(gi_1000g_g0m_g1, qlet)) # for compatibility with genetic samples
 
 # create file compatible with PLINK2
