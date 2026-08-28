@@ -11,7 +11,8 @@ library(tidyverse)
 args = commandArgs(trailingOnly=TRUE)
 INPUT_PHENO = args[1]
 INPUT_PRS = args[2]
-OUTPUT = args[3]
+OUTPUT_AGEGROUP = args[3]
+OUTPUT_LONG = args[4]
 
 # load data
 dat_pheno <- read_csv(paste0(INPUT_PHENO))
@@ -56,4 +57,5 @@ p1 <- dat_prs_wide %>%
 
 
 # Save dataset ------------------------------------------------------------
-combined_data %>% write_csv(paste0(OUTPUT))
+combined_data %>% write_csv(paste0(OUTPUT_AGEGROUP))
+combined_data %>% filter(all_three_times > 0) write_csv(paste0(OUTPUT_LONG))

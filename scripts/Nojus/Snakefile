@@ -53,8 +53,9 @@ def get_padded(wildcards):
 rule all:
   "The default rule"
   input:
-        f"{RESULTS_DIR}/plot.png",
-        f"{RESULTS_DIR}/prs_longtitudinal_analysis.csv"
+        f"{RESULTS_DIR}/main_plot.png",
+        f"{RESULTS_DIR}/prs_longtitudinal_analysis.csv",
+        f"{RESULTS_DIR}/sensitivity_plot.png"
 
 ###################################################################################################
 # (1) Recoding NAs
@@ -62,17 +63,19 @@ rule all:
 
 # 1.1 Recode NAs and create a sample sheet for eligible participants
 
-rule recode_nas:
-  "recode NAs and create a sample sheet for eligible participants"
+rule pre_proccessing:
+  "recode NAs, unify units, and select eligible individuals"
   input:
         pheno = f"{RAW_DIR}/B4891_Goudswaard_5Jan26.sav",
-        omicsid = f"{RAW_DIR}/B4891_OmicsIDs_5Jan26.sav"
+        omicsid = f"{RAW_DIR}/B4891_OmicsIDs_5Jan26.sav",
+        sample = f"{RAW_DIR}/genetic_data_raw/swapped.sample"
   output:
-        pheno = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/pheno_nas_recoded.csv",
-        sampleid = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/eligible_sample.id"
+        pheno = f"{INTERMEDIATE_DIR}/1-Pre-Proccessed/pheno_nas_recoded.csv",
+        sampleid = f"{INTERMEDIATE_DIR}/1-Pre-Proccessed/eligible_sample.id",
+        summary = f"{RESULTS_DIR}/summary_of_data.csv"
   shell:"""
-  mkdir -p {INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno
-  Rscript 1-Recoding-NAs/1.1-Recoding-NAs.R {input.pheno} {input.ommicsid} {output.pheno} {output.sampleid}
+  mkdir -p {INTERMEDIATE_DIR}/1-Pre-Proccessed
+  Rscript 1-Pre-Proccessing/1-Pre-Proccessing.R {input.pheno} {input.omicsid} {input.sample} {output.pheno} {output.sampleid} {output.summary}
   """
 
 ###################################################################################################
@@ -86,7 +89,7 @@ rule variant_qc:
   input:
         bgen = lambda w: f"{RAW_DIR}/genetic_data_raw/filtered_{get_padded(w)}.bgen",
         sample = f"{RAW_DIR}/genetic_data_raw/swapped.sample",
-        eligible_sample = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/eligible_sample.id"
+        eligible_sample = f"{INTERMEDIATE_DIR}/1-Pre-Proccessed/eligible_sample.id"
   output:
         pgen = f"{QC_DIR}/2.1-VL/VL_{{chr}}.pgen",
         psam = f"{QC_DIR}/2.1-VL/VL_{{chr}}.psam",
@@ -214,21 +217,21 @@ rule pca:
   """
 
 ###################################################################################################
-# (3) Pre-Proccessing
+# (3) Metabolite Transformation
 ###################################################################################################
 
-rule pre_proccessing:
-  "unify units of pheno data, group, and transform metabolites"
+rule metab_transform:
+  "Transform metabolites"
   input:
-        pheno = f"{INTERMEDIATE_DIR}/1-Recoded-NAs-Pheno/pheno_nas_recoded.csv",
-        psam_pruned = f"{QC_DIR}/2.4-Pruning/clean_pruned.psam",
+        pheno = f"{INTERMEDIATE_DIR}/1-Pre-Proccessed/pheno_nas_recoded.csv",
         eigenvec = f"{QC_DIR}/2.5-PCA/genetic_pcs20.eigenvec",
         eigenval = f"{QC_DIR}/2.5-PCA/genetic_pcs20.eigenval"
   output:
-        pheno = f"{INTERMEDIATE_DIR}/3-Pre-Proccessed/pheno_transformed.csv"
+        pheno = f"{INTERMEDIATE_DIR}/3-Pre-Proccessed/pheno_transformed.csv",
+        hist = f"{RESULTS_DIR}/transformed_metabolites.png"
   shell:"""
   mkdir -p {INTERMEDIATE_DIR}/3-Pre-Proccessed
-  Rscript 3-Pre-Proccessing/3.1-Pre-Proccessing-and-Transformation.R {input.pheno} {input.psam_pruned} {input.eigenvec} {input.eigenval} {output.pheno}
+  Rscript 3-Metabolite-Transformation /3-Metabolite-Transformation .R {input.pheno} {input.eigenvec} {input.eigenval} {output.pheno} {output.hist}
   """
 
 ###################################################################################################
@@ -249,10 +252,7 @@ def get_all_prs_inputs():
     return files
 
 rule prs_calc_all:
-    """
-    Submit sbatch jobs for every (source, metabolite) combination,
-    wait for all to finish, then touch all output files.
-    """
+    "Submit sbatch jobs for every (source, metabolite) combination"
     input:
         pgen = f"{QC_DIR}/2.4-Pruning/clean_unpruned.pgen",
         psam = f"{QC_DIR}/2.4-Pruning/clean_unpruned.psam",
@@ -314,11 +314,9 @@ rule prs_calc_all:
             touch "{QC_DIR}/4-PRS/$meta/$suffix/score/aggregated_scores.txt"
         done
         """
+
 rule combine_all_prs:
-    """
-    Stack all per‑(source, metabolite) score files into one table.
-    Adds 'metabolite' and 'prs_source' columns.
-    """
+    "Combine all PRS scores in one file"
     input:
         prs_files = get_all_prs_inputs()
     output:
@@ -374,9 +372,10 @@ rule combine_data:
         pheno = f"{INTERMEDIATE_DIR}/3-Pre-Proccessed/pheno_transformed.csv",
         prs = f"{INTERMEDIATE_DIR}/4-PRS/all_aggregated_scores_combined.txt"
   output:
-        f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data.csv"
+        agegroup = f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data_agegroup.csv",
+        long = f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data_long.csv",
   shell:"""
-  Rscript 5-Combine-Data/5.1-Combine-Data.R {input.pheno} {input.prs} {output}
+  Rscript 5-Combine-Data/5-Combine-Data.R {input.pheno} {input.prs} {output.agegroup} {output.long}
   """
 
 ###################################################################################################
@@ -385,8 +384,17 @@ rule combine_data:
 
 rule analysis_byagegroup:
   "analyse prs by age group"
-  input: f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data.csv"
+  input: f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data_agegroup.csv"
   output: f"{RESULTS_DIR}/prs_performance_by_age_group.csv"
+  resources: threads = 24, time = 120
+  shell:"""
+  Rscript 6-PRS-Analysis/6.1-PRS-Analysis-By-Age-Group.R {input} {output}
+  """
+rule sensitivity_analysis:
+  "analyse longtitudinal subset data by age group"
+  "analyse prs by age group"
+  input: f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data_long.csv"
+  output: f"{RESULTS_DIR}/prs_performance_by_age_group_sensitivity.csv"
   resources: threads = 24, time = 120
   shell:"""
   Rscript 6-PRS-Analysis/6.1-PRS-Analysis-By-Age-Group.R {input} {output}
@@ -394,7 +402,7 @@ rule analysis_byagegroup:
 
 rule longtitudinal_analysis:
   "analyse each PRS longtitudinally"
-  input: f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data.csv"
+  input: f"{INTERMEDIATE_DIR}/5-Combined-Data/combined_data_long.csv"
   output: f"{RESULTS_DIR}/prs_longtitudinal_analysis.csv"
   resources: threads = 12
   shell:"""
@@ -405,21 +413,27 @@ rule longtitudinal_analysis:
 # (7) Plots
 ###################################################################################################
 
-rule plot:
+rule plot_main:
   "plot results of prs by age group"
   input: f"{RESULTS_DIR}/prs_performance_by_age_group.csv"
-  output: f"{RESULTS_DIR}/plot.png"
+  output: f"{RESULTS_DIR}/main_plot.png"
   shell:"""
-  Rscript 7-Plots/7.1-PRS-By-Metabolite-By-Age-Group.R {input} {output}
+  Rscript 7-Plots/7-PRS-By-Metabolite-By-Age-Group.R {input} {output}
   """
-
+rule plot_sensitivity:
+  "plot results of prs by age group"
+  input: f"{RESULTS_DIR}/prs_performance_by_age_group_sensitivity.csv"
+  output: f"{RESULTS_DIR}/sensitivity_plot.png"
+  shell:"""
+  Rscript 7-Plots/7-PRS-By-Metabolite-By-Age-Group.R {input} {output}
+  """
 
 # 0. Cleaning
 
 rule clean1:
-  "clean directory 1-Pheno-NAs-Recoded"
+  "clean directory 1-Pre-Proccessed"
   shell:"""
-  rm -rf {INTERMEDIATE_DIR}/1-Pheno-NAs-Recoded
+  rm -rf {INTERMEDIATE_DIR}/1-Pre-Proccessed
   """
 rule clean_VL:
   "clean directory 2.1-VL"
@@ -446,8 +460,24 @@ rule clean_pca:
   shell:"""
   rm -rf {QC_DIR}/2.5-PCA
   """
-rule clean_all:
-  "clean all intermediate genetic QC directories (keep final resultq)"
+rule clean_transformed:
+  "clean directory 3-Pre-Proccessed"
   shell:"""
-  snakemake -c1 clean_VL clean_SL clean_PV
+  rm -rf {INTERMEDIATE_DIR}/3-Pre-Proccessed
+  """
+rule clean_combined:
+  "clean directory 5-Combined-Data"
+  shell:"""
+  rm -rf {INTERMEDIATE_DIR}/5-Combined-Data
+  """
+rule clean_results:
+  "clean results directory"
+  shell:"""
+  rm -rf {RESULTS_DIR}
+  """
+
+rule clean_genetic:
+  "clean all intermediate genetic QC directories (keep final results)"
+  shell:"""
+  snakemake -c1 clean1 clean_VL clean_SL clean_PV 
   """
