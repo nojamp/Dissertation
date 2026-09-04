@@ -1,7 +1,0 @@
-Building DAG of jobs...
-MissingInputException in rule recode_nas in file /home/nojamp/Dissertation/scripts/Nojus/Snakefile, line 65:
-Missing input files for rule recode_nas:
-    output: ../../data/intermediate/1-Recoded-NAs-Pheno/pheno_nas_recoded.csv, ../../data/intermediate/1-Recoded-NAs-Pheno/eligible_sample.id
-    affected files:
-        ../../data/raw/Nojus/B4891_OmicsIDs_5Jan26.sav
-        ../../data/raw/Nojus/B4891_Goudswaard_5Jan26.sav

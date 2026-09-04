@@ -1,0 +1,11 @@
+default-resources:
+  - slurm_partition=compute
+  - slurm_account=[ACCOUNT_ID]
+  - mem_mb=10000
+  - runtime=5
+  - threads=10
+  - nodes=1
+
+jobs: 23
+printshellcmds: FALSE
+scheduler: greedy

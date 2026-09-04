@@ -1,0 +1,14 @@
+name: dissertation_env
+channels:
+  - conda-forge
+dependencies:
+  - snakemake-executor-plugin-slurm=2.0.0
+  - python=3.11.14
+  - snakemake=7.32.4
+  - r-tidyverse
+  - r-naniar
+  - r-haven
+  - r-rnomni
+  - r-performance
+  - r-splines2
+  - r-glmmtmb
